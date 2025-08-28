@@ -1,234 +1,155 @@
-"""
-email_calibration_full.py
-Synthetic 5-class e-mail data  ➜  TF-IDF + Logistic-Regression
-➜  quantitative metrics  ➜  seven saved plots  ➜  zipped archive.
+#!/usr/bin/env python
+# dummy_email_confidence.py
+# ---------------------------------------------------------------
+# Synthetic 1 000-row / 5-class e-mail classification experiment
+# Generates full quantitative & visual confidence analysis
+# ---------------------------------------------------------------
 
-Run:
-    pip install scikit-learn matplotlib seaborn numpy
-    python email_calibration_full.py
-"""
+import numpy as np, pandas as pd, matplotlib.pyplot as plt, seaborn as sns
+from pathlib import Path
+from sklearn.metrics import (accuracy_score, f1_score, matthews_corrcoef,
+                             log_loss, precision_recall_curve,
+                             confusion_matrix)
+from sklearn.linear_model import LinearRegression
 
-import random, zipfile, numpy as np, matplotlib.pyplot as plt, seaborn as sns
-from datetime import datetime, timedelta
-from collections import Counter
-from pathlib   import Path
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model            import LogisticRegression
-from sklearn.model_selection         import train_test_split
-from sklearn.preprocessing           import label_binarize
-from sklearn.metrics import (
-    accuracy_score, log_loss, roc_curve, auc,
-    precision_recall_curve, average_precision_score, classification_report
-)
-from sklearn.calibration import calibration_curve
+# ---------------------------------------------------------------
+# 1  SYNTHETIC DATASET
+# ---------------------------------------------------------------
+np.random.seed(42)
+N, C = 1_000, 5
+CLASSES = ["Spam", "Important", "Newsletter", "Personal", "Work"]
+PRIORS  = [0.25, 0.15, 0.20, 0.20, 0.20]
 
-# -------------------------------------------------------------------------
-# 1  Synthetic e-mail dataset
-# -------------------------------------------------------------------------
-BASE  = datetime(2024, 1, 1)
-CATS  = ["Spam", "Work", "Personal", "Newsletter", "Important"]
-N_PER = [60, 55, 45, 40, 45]                     # samples per class
-TEMPL = {
-    "Spam":       ["Win big now!", "Cheap pills today!", "Click here—prize!"],
-    "Work":       ["Team meeting 2 PM.", "Budget report due Friday."],
-    "Personal":   ["Dinner this weekend?", "Happy birthday!"],
-    "Newsletter": ["AI weekly roundup.", "Recipe of the month."],
-    "Important":  ["URGENT: Server down!", "Security breach detected!"]
+y_true = np.random.choice(C, N, p=PRIORS)
+
+def noisy_dirichlet(label, noise=0.7):
+    alpha           = np.ones(C)*noise
+    alpha[label]   *= 5                    # bias toward ground-truth class
+    return np.random.dirichlet(alpha)
+
+probs = np.vstack([noisy_dirichlet(l) for l in y_true])
+y_pred = probs.argmax(axis=1)
+conf   = probs.max(axis=1)
+
+# ---------------------------------------------------------------
+# 2  QUANTITATIVE & CALIBRATION METRICS
+# ---------------------------------------------------------------
+one_hot = np.eye(C)[y_true]
+metrics = {
+    "Accuracy"        : accuracy_score(y_true, y_pred),
+    "Macro-F1"        : f1_score(y_true, y_pred, average="macro"),
+    "MCC"             : matthews_corrcoef(y_true, y_pred),
+    "Log-loss"        : log_loss(y_true, probs),
+    "Brier Score"     : np.mean(np.sum((probs-one_hot)**2, axis=1)),
 }
-def hour(cat):
-    if cat == "Work":   # business hours
-        return random.choices(range(9,18),
-                              weights=[5,10,15,15,15,15,10,10,5])[0]
-    if cat == "Spam":   # any time
-        return random.randint(0,23)
-    # evening-tilted for the rest
-    return random.choices(range(24),
-                          weights=[2]*8 + [6]*10 + [8]*6)[0]
-def synth(cat):
-    d  = random.randint(0,180)
-    ts = BASE + timedelta(days=d, hours=hour(cat))
-    txt= random.choice(TEMPL[cat])
-    return f"{txt}\nSent: {ts:%Y-%m-%d %H:%M}", cat
 
-texts, labels = [], []
-for c, n in zip(CATS, N_PER):
-    texts += [synth(c)[0] for _ in range(n)]
-    labels += [c]*n
-
-lab2int = {c:i for i,c in enumerate(CATS)}
-y = np.array([lab2int[l] for l in labels])
-
-# -------------------------------------------------------------------------
-# 2  Model
-# -------------------------------------------------------------------------
-X_tr, X_te, y_tr, y_te = train_test_split(
-    texts, y, test_size=0.30, stratify=y, random_state=42)
-
-vec  = TfidfVectorizer(stop_words="english", max_features=2_000)
-X_tr = vec.fit_transform(X_tr)
-X_te = vec.transform(X_te)
-
-clf   = LogisticRegression(max_iter=1_000).fit(X_tr, y_tr)
-probs = clf.predict_proba(X_te)              # (n_samples, 5)
-preds = clf.predict(X_te)
-conf  = probs.max(1)
-correct = (preds == y_te).astype(float)
-
-# -------------------------------------------------------------------------
-# 3  Quantitative metrics
-# -------------------------------------------------------------------------
-def brier(y_true, p):
-    oh = np.zeros_like(p); oh[np.arange(len(p)), y_true] = 1
-    return np.mean((p - oh).sum(1)**2)
-def ece(n=15):
-    err = 0; bins = np.linspace(0,1,n+1)
-    for lo,hi in zip(bins[:-1], bins[1:]):
+def ece_mce(y, p, bins=15):
+    edges = np.linspace(0,1,bins+1)
+    acc   = (p.argmax(1)==y)
+    conf  = p.max(1)
+    ece = mce = 0.0
+    for lo, hi in zip(edges[:-1], edges[1:]):
         m = (conf>lo)&(conf<=hi)
         if m.any():
-            err += m.mean()*abs(conf[m].mean() - correct[m].mean())
-    return err
-def slope_int(n=15):
-    xs=ys=w=[]; bins=np.linspace(0,1,n+1)
-    xs,ys,w=[],[],[]
-    for lo,hi in zip(bins[:-1],bins[1:]):
-        m=(conf>lo)&(conf<=hi)
-        if m.sum(): xs.append(conf[m].mean()); ys.append(correct[m].mean()); w.append(m.sum())
-    xs,ys,w=np.array(xs),np.array(ys),np.array(w)
-    if len(xs)<2: return float("nan"), float("nan")
-    wm = lambda z:(w*z).sum()/w.sum()
-    slope = (w*(xs-wm(xs))*(ys-wm(ys))).sum() / (w*(xs-wm(xs))**2).sum()
-    intercept = wm(ys) - slope*wm(xs)
-    return slope, intercept
+            gap  = abs(acc[m].mean()-conf[m].mean())
+            ece += m.mean()*gap
+            mce  = max(mce, gap)
+    return ece, mce
 
-acc   = accuracy_score(y_te, preds)
-lloss = log_loss(y_te, probs)
-brier_v = brier(y_te, probs)
-ece_v   = ece()
-slope_v, int_v = slope_int()
+metrics["ECE"], metrics["MCE"] = ece_mce(y_true, probs)
 
-# -------------------------------------------------------------------------
-# 4  Plots saved next to the script
-# -------------------------------------------------------------------------
-DIR   = Path(__file__).resolve().parent if "__file__" in globals() else Path(".")
-plt.rcParams["figure.figsize"] = (6,5)
-sns.set_style("whitegrid")
-plots = []
+# reliability line
+edges = np.linspace(0,1,16)
+x=y=w=[]
+for lo, hi in zip(edges[:-1], edges[1:]):
+    m = (conf>lo)&(conf<=hi)
+    if m.any():
+        x.append(conf[m].mean()); y.append((y_pred[m]==y_true[m]).mean()); w.append(m.sum())
+slope, intercept = LinearRegression().fit(
+    np.array(x).reshape(-1,1), y, sample_weight=w).coef_[0], \
+    LinearRegression().fit(np.array(x).reshape(-1,1), y, sample_weight=w).intercept_
+metrics["Reliability slope"]     = slope
+metrics["Reliability intercept"] = intercept
 
-def save(fig_name):
-    plt.tight_layout()
-    plt.savefig(DIR / fig_name, dpi=150)
-    plt.close()
-    plots.append(fig_name)
+# Spiegelhalter Z
+z_num = np.sum((y_pred==y_true)-conf)
+z_den = np.sqrt(np.sum(conf*(1-conf)))
+metrics["Spiegelhalter Z"] = z_num/z_den if z_den else float("nan")
 
-# A Reliability + histogram
-bins=np.linspace(0,1,11)
-mids=accs=sizes=[]; mids,accs,sizes=[],[],[]
-for lo,hi in zip(bins[:-1],bins[1:]):
+# over/under–confidence
+over = under = 0
+for lo, hi in zip(edges[:-1], edges[1:]):
     m=(conf>lo)&(conf<=hi)
-    if m.sum():
-        mids.append(conf[m].mean()); accs.append(correct[m].mean()); sizes.append(m.sum())
-plt.subplot(211)
-plt.plot([0,1],[0,1],'k--')
-plt.scatter(mids,accs,s=[s*1.5 for s in sizes],edgecolor='k')
-plt.xlabel("Mean confidence"); plt.ylabel("Fraction positives"); plt.title("Reliability diagram")
-plt.subplot(212)
-plt.hist(conf,bins=20,color='skyblue',edgecolor='k')
-plt.xlabel("Confidence"); plt.ylabel("Count"); plt.title("Confidence histogram")
-save("reliability_and_hist.png")
+    if m.any():
+        gap=conf[m].mean()-(y_pred[m]==y_true[m]).mean()
+        (over if gap>0 else under).__add__(m.mean()*abs(gap))
+metrics["Over-confidence error"]  = over
+metrics["Under-confidence error"] = under
 
-# B Risk–coverage
-thr=np.linspace(0,1,21); cov=risk=[],[]
-cov,risk=[],[]
-for t in thr:
-    m=conf>=t
-    if m.any(): cov.append(m.mean()); risk.append(1-correct[m].mean())
-plt.plot(cov,risk,'-o'); plt.gca().invert_xaxis()
-plt.xlabel("Coverage"); plt.ylabel("Error rate"); plt.title("Risk–coverage curve")
-save("risk_coverage.png")
+# Ranked-Probability Score
+cum_p = np.cumsum(probs,1)
+cum_o = np.zeros_like(cum_p)
+for i in range(N): cum_o[i, y_true[i]:] = 1
+metrics["RPS"] = np.mean(np.sum((cum_p-cum_o)**2,1))
 
-# C Per-class calibration
-fig,ax=plt.subplots(2,3,figsize=(15,8)); ax=ax.ravel()
-for i,c in enumerate(CATS):
-    fpos, mp = calibration_curve((y_te==i).astype(int), probs[:,i],
-                                 n_bins=10, strategy="uniform")
-    ax[i].plot([0,1],[0,1],'k--',lw=0.8)
-    ax[i].plot(mp,fpos,'o-',label=c)
-    ax[i].set(xlabel="Mean predicted", ylabel="Fraction positives",
-              title=f"Calibration – {c}")
-    ax[i].legend(fontsize=8)
-fig.suptitle("Per-class calibration curves")
-fig.tight_layout(rect=[0,0,1,0.96])
-fig.savefig(DIR/"per_class_calibration.png", dpi=150); plt.close()
-plots.append("per_class_calibration.png")
+# Sharpness (mean entropy)
+metrics["Sharpness"] = (-probs*np.log(np.clip(probs,1e-12,1))).sum(1).mean()
 
-# D Confusion matrix
-cm = np.zeros((len(CATS), len(CATS)), int)
-for t,p in zip(y_te,preds): cm[t,p]+=1
-sns.heatmap(cm,annot=True,fmt='d',cmap='Blues',
-            xticklabels=CATS, yticklabels=CATS)
-plt.xlabel("Predicted"); plt.ylabel("True"); plt.title("Confusion matrix")
-save("confusion_matrix.png")
+# Write text file
+out_dir = Path(__file__).resolve().parent
+(out_dir/"quantitative_results.txt").write_text(
+    "\n".join(f"{k}: {v}" for k,v in metrics.items())
+)
 
-# E ROC curves (micro, macro, per-class)
-y_bin = label_binarize(y_te, classes=list(range(len(CATS))))
-fpr,tpr,aucv={}, {}, {}
-for i in range(len(CATS)):
-    fpr[i],tpr[i],_=roc_curve(y_bin[:,i],probs[:,i]); aucv[i]=auc(fpr[i],tpr[i])
-fpr["micro"],tpr["micro"],_ = roc_curve(y_bin.ravel(),probs.ravel())
-aucv["micro"]=auc(fpr["micro"],tpr["micro"])
-all_fpr=np.unique(np.concatenate([fpr[i] for i in range(len(CATS))]))
-mean_tpr=np.vstack([np.interp(all_fpr,fpr[i],tpr[i]) for i in range(len(CATS))]).mean(0)
-aucv["macro"]=auc(all_fpr,mean_tpr)
-plt.plot(fpr["micro"],tpr["micro"],label=f"micro AUC={aucv['micro']:.2f}",color='deeppink')
-plt.plot(all_fpr,mean_tpr,label=f"macro AUC={aucv['macro']:.2f}",color='navy')
-for i,c in enumerate(CATS):
-    plt.plot(fpr[i],tpr[i],lw=1,label=f"{c} ({aucv[i]:.2f})")
-plt.plot([0,1],[0,1],'k--',lw=0.8)
-plt.xlabel("FPR"); plt.ylabel("TPR"); plt.title("ROC curves"); plt.legend(fontsize=8)
-save("roc_curves.png")
+# ---------------------------------------------------------------
+# 3  VISUAL DIAGNOSTICS
+# ---------------------------------------------------------------
+# 3-a  Precision–Recall per class
+plt.figure(figsize=(8,6))
+for i,name in enumerate(CLASSES):
+    prec, rec, _ = precision_recall_curve((y_true==i).astype(int), probs[:,i])
+    plt.plot(rec, prec, label=name)
+plt.xlabel("Recall"); plt.ylabel("Precision")
+plt.title("Precision–Recall Curve per Class")
+plt.legend(); plt.grid(True); plt.tight_layout()
+plt.savefig(out_dir/"pr_curve_per_class.png"); plt.close()
 
-# F Precision–Recall curves
-plt.figure()
-for i,c in enumerate(CATS):
-    p,r,_ = precision_recall_curve(y_bin[:,i], probs[:,i])
-    ap    = average_precision_score(y_bin[:,i], probs[:,i])
-    plt.plot(r,p,lw=1,label=f"{c} AP={ap:.2f}")
-plt.xlabel("Recall"); plt.ylabel("Precision"); plt.title("Precision–Recall curves")
-plt.legend(fontsize=8)
-save("precision_recall_curves.png")
+# 3-b  Confusion-matrix heat-map
+cm = confusion_matrix(y_true, y_pred, labels=range(C))
+plt.figure(figsize=(8,6))
+sns.heatmap(cm, annot=True, fmt="d",
+            xticklabels=CLASSES, yticklabels=CLASSES, cmap="Blues")
+plt.xlabel("Predicted"); plt.ylabel("True")
+plt.title("Confusion Matrix"); plt.tight_layout()
+plt.savefig(out_dir/"confusion_matrix.png"); plt.close()
 
-# G Confidence violin
-sns.violinplot(x=[CATS[i] for i in preds], y=conf,
-               order=CATS, palette="Pastel1", cut=0)
-plt.xlabel("Predicted class"); plt.ylabel("Predicted confidence")
-plt.title("Per-class confidence distribution")
-save("confidence_violin.png")
+# 3-c  Calibration error per confidence decile
+edges = np.linspace(0,1,11)
+calib = [abs(conf[((conf>lo)&(conf<=hi))].mean() -
+             (y_pred[((conf>lo)&(conf<=hi))]==y_true[((conf>lo)&(conf<=hi))]).mean())
+         if ((conf>lo)&(conf<=hi)).any() else 0
+         for lo,hi in zip(edges[:-1],edges[1:])]
+plt.figure(figsize=(8,4))
+plt.bar(range(10), calib)
+plt.xticks(range(10), [f"{edges[i]:.1f}-{edges[i+1]:.1f}" for i in range(10)], rotation=45)
+plt.ylabel("Calibration error")
+plt.title("Calibration Error per Confidence Decile")
+plt.tight_layout(); plt.savefig(out_dir/"calibration_heatmap.png"); plt.close()
 
-# -------------------------------------------------------------------------
-# 5  Metrics text file
-# -------------------------------------------------------------------------
-with open(DIR/"email_calibration_metrics.txt","w") as f:
-    f.write("Email-classification quantitative metrics\n")
-    f.write("-"*42 + "\n")
-    f.write(f"Accuracy:             {acc:.3f}\n")
-    f.write(f"Log-loss:             {lloss:.3f}\n")
-    f.write(f"Multiclass Brier:     {brier_v:.3f}\n")
-    f.write(f"Expected Calib Err.:  {ece_v:.3f}\n")
-    f.write(f"Slope:                {slope_v:.2f}\n")
-    f.write(f"Intercept:            {int_v:.2f}\n\n")
-    f.write("Classification report:\n")
-    f.write(classification_report(y_te, preds, target_names=CATS, digits=3))
-    f.write("\nClass distribution (test set):\n")
-    for c in CATS:
-        f.write(f"{c:11}: {(y_te == lab2int[c]).sum()}\n")
-plots.append("email_calibration_metrics.txt")
+# 3-d  Per-class accuracy over synthetic time bins
+time  = np.linspace(0,100,N) + np.random.randn(N)*5
+bins  = pd.qcut(time, 10, labels=False, duplicates="drop")
+acc_t = np.full((10,C), np.nan)
+for b in range(10):
+    idx = np.where(bins==b)[0]
+    for c in range(C):
+        cls = idx[y_true[idx]==c]
+        acc_t[b,c] = (y_pred[cls]==c).mean() if cls.size else np.nan
+plt.figure(figsize=(10,6))
+for c in range(C): plt.plot(acc_t[:,c], label=CLASSES[c])
+plt.xlabel("Time bins"); plt.ylabel("Accuracy")
+plt.title("Per-Class Accuracy Over Time")
+plt.legend(); plt.grid(True); plt.tight_layout()
+plt.savefig(out_dir/"per_class_accuracy_time.png"); plt.close()
 
-# -------------------------------------------------------------------------
-# 6  ZIP bundle
-# -------------------------------------------------------------------------
-with zipfile.ZipFile(DIR/"email_calibration_plots.zip","w") as z:
-    for fn in plots:
-        z.write(DIR/fn)
-
-print("\nSaved:", *plots, sep="\n  • ")
-print("\nArchived as  email_calibration_plots.zip")
+print("✓ quantitative_results.txt and four PNGs saved next to script")
