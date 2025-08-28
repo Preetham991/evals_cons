@@ -3583,6 +3583,378 @@ Provides comprehensive view of confidence-performance relationships, supports th
 **Disadvantages**:
 Can become complex with multiple confidence strata and classes, requires careful interpretation to avoid misleading conclusions, may not capture dynamic performance relationships over time, visualization complexity can hinder stakeholder communication, and optimal thresholds may not generalize across different operational conditions.
 
+### 4.2.1 Reliability (Confidence-Accuracy) Diagram
+
+**Foundation \& Goal**
+Plots observed accuracy versus predicted confidence to diagnose probabilistic calibration. A perfectly calibrated model traces the **45-degree identity line**.[^1][^2]
+
+**Construction**
+
+1. Bin predictions by confidence (equal-width or equal-mass).
+2. For each bin $B_m$:
+ accuracy $=\frac{1}{|B_m|}\sum_{i\in B_m}\mathbf1[\hat y_i=y_i]$
+ confidence $=\frac{1}{|B_m|}\sum_{i\in B_m} \max_c p_{i,c}$
+3. Plot (confidence, accuracy) pairs; add the identity line and a histogram of sample counts.
+
+**When to choose**
+
+- First-line diagnostic whenever probabilities will drive thresholds or automation.
+- E-mail tip – colour curves by sender domain to expose spoofing drift.
+
+**Pros**
+
++ Visual, intuitive; pinpoints over-/under-confidence zones.
++ Works for any classifier that outputs probabilities.
+
+**Cons**
+– Choice of bin count changes appearance; too few hides local issues, too many adds noise.
+– Needs ≥ 1,000 samples for stable curves.
+
+***
+
+### 4.2.2 Risk–Coverage (Selective-Prediction) Curve
+
+**Foundation \& Goal**
+Shows the trade-off between *coverage* (fraction of e-mails the system answers) and *risk* (error on answered subset). Helps set abstention thresholds.[^3][^4]
+
+**Construction**
+For every confidence threshold τ:
+ coverage $φ(τ)=P(\max p ≥ τ)$
+ risk $R(τ)=P(\hat y≠y \mid \max p ≥ τ)$
+Plot R(τ) (y-axis) against φ(τ) (x-axis); the **area under the curve** (AURC) is a scalar summary (lower is better).
+
+**When to choose**
+
+- You allow the classifier to refuse low-confidence e-mails (human fallback queues).
+- E-mail tip – find τ where human review cost intersects misclassification cost.
+
+**Pros**
+
++ Quantifies safety-accuracy trade-off.
++ Independent of class balance.
+
+**Cons**
+– Requires full confidence spectrum; noisy at extremes.
+– Harder to explain than ROC/PR to non-experts.
+
+***
+
+### 4.2.3 P-P (Probability–Probability) Plot
+
+**Foundation \& Goal**
+Compares empirical CDF of predicted probabilities with the uniform CDF expected under perfect calibration. Deviations from the diagonal indicate mis-calibration.[^5][^6]
+
+**Construction**
+
+1. Sort all predicted confidences $p_{(i)}$.
+2. Plot points $(p_{(i)},\,i/N)$. Straight line $y=x$ indicates ideal calibration.
+
+**When to choose**
+
+- Binary spam/not-spam tasks with large test sets (>10 k).
+- Use as a complement to reliability diagrams for distribution-level view.
+
+**Pros**
+
++ No binning; full cumulative information.
++ Sensitive to systematic bias across entire range.
+
+**Cons**
+– Less intuitive: slope > 1 below 0.5 can be misread.
+– Multi-class extension cumbersome (one-vs-rest needed).
+
+***
+
+### 4.2.4 Temporal Stability Charts (ECE or MCE vs Time)
+
+**Foundation \& Goal**
+Track calibration error over time-windows to detect model drift or data-seasonality.[^7]
+
+**Construction**
+Compute ECE (or MCE) in rolling windows (e.g., daily); plot time on x-axis, metric on y-axis, optionally overlay deployment events.
+
+**When to choose**
+
+- Production monitoring dashboards.
+- E-mail tip – spike during Black-Friday promotional surge warns domain shift.
+
+**Pros**
+
++ Immediate drift signal; easy alerting.
++ Works with any underlying scalar metric.
+
+**Cons**
+– Requires enough traffic per window; low-volume classes get noisy curves.
+– Hard to separate cause (data shift vs model decay) without further analysis.
+
+***
+
+### 4.2.5 Multi-Dimensional Confidence Space Projections (t-SNE / PCA)
+
+**Foundation \& Goal**
+Embed high-dimensional logit vectors into 2-D to visualise class clusters and confidence landscape.[^8]
+
+**Construction**
+
+- Input feature = raw logits or posterior probabilities.
+- Apply PCA for global structure, then t-SNE/UMAP for local separation.
+- Colour by predicted class; overlay point size = max p or entropy.
+
+**When to choose**
+
+- Exploratory analysis of new label schema; debugging unexpected confusions.
+- E-mail tip – reveals “Newsletter” cluster overlapping “Personal”, hinting mis-labelled training data.
+
+**Pros**
+
++ Human-interpretable map of decision space.
++ Identifies outliers/OOD pockets visually.
+
+**Cons**
+– Global distances distorted; t-SNE layout non-deterministic.
+– Computationally heavy on >100 k samples.
+
+***
+
+### 4.2.6 Feature–Confidence Interaction Plots
+
+**Foundation \& Goal**
+Plot relationship between a *single feature* and model confidence to uncover bias or brittle regions.[^9]
+
+**Construction**
+
+- Bucket the feature (e.g., e-mail length deciles).
+- For each bucket plot median or IQR of confidence; optionally overlay accuracy.
+
+**When to choose**
+
+- Data-quality audits; diagnosing feature-specific over-confidence.
+- E-mail tip – long threads may show lower confidence → consider separate model for threads.
+
+**Pros**
+
++ Pinpoints systematic bias tied to interpretable attributes.
++ Simple to generate from aggregated logs.
+
+**Cons**
+– Univariate view; can miss interactions.
+– Requires numeric or discretised features.
+
+***
+
+### 4.2.7 Uncertainty Decomposition Plots (Epistemic vs Aleatoric)
+
+**Foundation \& Goal**
+Separate total predictive uncertainty into *epistemic* (model) and *aleatoric* (data) components for decision-making.[^10][^11]
+
+**Construction**
+
+1. Sample model weights (MC-Dropout/BNN) or ensembles.
+2. For each e-mail compute:
+ Aleatoric $=\mathbb E_W[H(p_{W})]$
+ Epistemic $=H(\bar p)-$ Aleatoric
+3. Visualise as stacked bar or density plot; map in feature space or over time.
+
+**When to choose**
+
+- Prioritising annotation effort: high epistemic zones get more labels.
+- E-mail tip – rare phishing templates surface as epistemic peaks.
+
+**Pros**
+
++ Actionable: tells whether to gather data (epistemic) or accept noise (aleatoric).
++ Fits active-learning loops.
+
+**Cons**
+– Needs stochastic model access; slower inference.
+– Decomposition assumptions vary by method; results can disagree.
+
+### 4.2.1 Reliability (Confidence-Accuracy) Diagram
+
+**Foundation \& Goal**
+Plots observed accuracy versus predicted confidence to diagnose probabilistic calibration. A perfectly calibrated model traces the **45-degree identity line**.[^1][^2]
+
+**Construction**
+
+1. Bin predictions by confidence (equal-width or equal-mass).
+2. For each bin $B_m$:
+ accuracy $=\frac{1}{|B_m|}\sum_{i\in B_m}\mathbf1[\hat y_i=y_i]$
+ confidence $=\frac{1}{|B_m|}\sum_{i\in B_m} \max_c p_{i,c}$
+3. Plot (confidence, accuracy) pairs; add the identity line and a histogram of sample counts.
+
+**When to choose**
+
+- First-line diagnostic whenever probabilities will drive thresholds or automation.
+- E-mail tip – colour curves by sender domain to expose spoofing drift.
+
+**Pros**
+
++ Visual, intuitive; pinpoints over-/under-confidence zones.
++ Works for any classifier that outputs probabilities.
+
+**Cons**
+– Choice of bin count changes appearance; too few hides local issues, too many adds noise.
+– Needs ≥ 1,000 samples for stable curves.
+
+***
+
+### 4.2.2 Risk–Coverage (Selective-Prediction) Curve
+
+**Foundation \& Goal**
+Shows the trade-off between *coverage* (fraction of e-mails the system answers) and *risk* (error on answered subset). Helps set abstention thresholds.[^3][^4]
+
+**Construction**
+For every confidence threshold τ:
+ coverage $φ(τ)=P(\max p ≥ τ)$
+ risk $R(τ)=P(\hat y≠y \mid \max p ≥ τ)$
+Plot R(τ) (y-axis) against φ(τ) (x-axis); the **area under the curve** (AURC) is a scalar summary (lower is better).
+
+**When to choose**
+
+- You allow the classifier to refuse low-confidence e-mails (human fallback queues).
+- E-mail tip – find τ where human review cost intersects misclassification cost.
+
+**Pros**
+
++ Quantifies safety-accuracy trade-off.
++ Independent of class balance.
+
+**Cons**
+– Requires full confidence spectrum; noisy at extremes.
+– Harder to explain than ROC/PR to non-experts.
+
+***
+
+### 4.2.3 P-P (Probability–Probability) Plot
+
+**Foundation \& Goal**
+Compares empirical CDF of predicted probabilities with the uniform CDF expected under perfect calibration. Deviations from the diagonal indicate mis-calibration.[^5][^6]
+
+**Construction**
+
+1. Sort all predicted confidences $p_{(i)}$.
+2. Plot points $(p_{(i)},\,i/N)$. Straight line $y=x$ indicates ideal calibration.
+
+**When to choose**
+
+- Binary spam/not-spam tasks with large test sets (>10 k).
+- Use as a complement to reliability diagrams for distribution-level view.
+
+**Pros**
+
++ No binning; full cumulative information.
++ Sensitive to systematic bias across entire range.
+
+**Cons**
+– Less intuitive: slope > 1 below 0.5 can be misread.
+– Multi-class extension cumbersome (one-vs-rest needed).
+
+***
+
+### 4.2.4 Temporal Stability Charts (ECE or MCE vs Time)
+
+**Foundation \& Goal**
+Track calibration error over time-windows to detect model drift or data-seasonality.[^7]
+
+**Construction**
+Compute ECE (or MCE) in rolling windows (e.g., daily); plot time on x-axis, metric on y-axis, optionally overlay deployment events.
+
+**When to choose**
+
+- Production monitoring dashboards.
+- E-mail tip – spike during Black-Friday promotional surge warns domain shift.
+
+**Pros**
+
++ Immediate drift signal; easy alerting.
++ Works with any underlying scalar metric.
+
+**Cons**
+– Requires enough traffic per window; low-volume classes get noisy curves.
+– Hard to separate cause (data shift vs model decay) without further analysis.
+
+***
+
+### 4.2.5 Multi-Dimensional Confidence Space Projections (t-SNE / PCA)
+
+**Foundation \& Goal**
+Embed high-dimensional logit vectors into 2-D to visualise class clusters and confidence landscape.[^8]
+
+**Construction**
+
+- Input feature = raw logits or posterior probabilities.
+- Apply PCA for global structure, then t-SNE/UMAP for local separation.
+- Colour by predicted class; overlay point size = max p or entropy.
+
+**When to choose**
+
+- Exploratory analysis of new label schema; debugging unexpected confusions.
+- E-mail tip – reveals “Newsletter” cluster overlapping “Personal”, hinting mis-labelled training data.
+
+**Pros**
+
++ Human-interpretable map of decision space.
++ Identifies outliers/OOD pockets visually.
+
+**Cons**
+– Global distances distorted; t-SNE layout non-deterministic.
+– Computationally heavy on >100 k samples.
+
+***
+
+### 4.2.6 Feature–Confidence Interaction Plots
+
+**Foundation \& Goal**
+Plot relationship between a *single feature* and model confidence to uncover bias or brittle regions.[^9]
+
+**Construction**
+
+- Bucket the feature (e.g., e-mail length deciles).
+- For each bucket plot median or IQR of confidence; optionally overlay accuracy.
+
+**When to choose**
+
+- Data-quality audits; diagnosing feature-specific over-confidence.
+- E-mail tip – long threads may show lower confidence → consider separate model for threads.
+
+**Pros**
+
++ Pinpoints systematic bias tied to interpretable attributes.
++ Simple to generate from aggregated logs.
+
+**Cons**
+– Univariate view; can miss interactions.
+– Requires numeric or discretised features.
+
+***
+
+### 4.2.7 Uncertainty Decomposition Plots (Epistemic vs Aleatoric)
+
+**Foundation \& Goal**
+Separate total predictive uncertainty into *epistemic* (model) and *aleatoric* (data) components for decision-making.[^10][^11]
+
+**Construction**
+
+1. Sample model weights (MC-Dropout/BNN) or ensembles.
+2. For each e-mail compute:
+ Aleatoric $=\mathbb E_W[H(p_{W})]$
+ Epistemic $=H(\bar p)-$ Aleatoric
+3. Visualise as stacked bar or density plot; map in feature space or over time.
+
+**When to choose**
+
+- Prioritising annotation effort: high epistemic zones get more labels.
+- E-mail tip – rare phishing templates surface as epistemic peaks.
+
+**Pros**
+
++ Actionable: tells whether to gather data (epistemic) or accept noise (aleatoric).
++ Fits active-learning loops.
+
+**Cons**
+– Needs stochastic model access; slower inference.
+– Decomposition assumptions vary by method; results can disagree.
+
 ## 5. Email Dataset Setup: Ultra-Detailed Configuration
 
 ### 5.1 Dataset Composition and Rationale
