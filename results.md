@@ -1,4 +1,4 @@
-<img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" style="height:64px;margin-right:32px"/>
+
 
 # make detailed analysis of applied criteria both quantitative and visual for the dataset '
 
@@ -74,7 +74,7 @@ Actionable next steps
 This halves review load while capping residual error at 3%.
 4. Monitor per-class ECE weekly; alert if any class rises above 0.08 (early drift signal).
 
-With these refinements the model will retain its **86% discrimination** while delivering **sub-3% calibration error**, making probability scores trustworthy for real-time e-mail triage.
+With these refinements the model will retain its **86% discrimination** while delivering **sub-3% calibration error**, making probability scores trustworthy for real-time e-mail classification.
 <span style="display:none">[^1][^10][^11][^12][^13][^14][^15][^16][^17][^18][^19][^2][^20][^3][^4][^5][^6][^7][^8][^9]</span>
 
 <div style="text-align: center">⁂</div>
