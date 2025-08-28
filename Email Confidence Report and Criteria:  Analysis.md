@@ -1,7 +1,7 @@
 
 
 
-# Email Confidence Report and Criteria: Ultra-Detailed Analysis
+# Email Confidence Report and Criteria:  Analysis
 
 ## 1. Title & Executive Summary
 
