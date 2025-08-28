@@ -4233,72 +4233,81 @@ All numeric values are the exact outputs from your script (test set = 73 message
 
 ***
 
-Quantitative criteria
+
+Below are two separate, information-dense tables.
+
+- Table A covers *performance / discrimination* metrics.
+- Table B covers *reliability / calibration* metrics.
+
+Each row gives
+– the exact formula or statistical test,
+– its canonical range or “good” target,
+– the value observed on your 1 000-e-mail run, and
+– a detailed explanation that links the number to model behaviour and operational use.
+
+-----------------------------------------------------------------
+Table A Performance-oriented metrics
+-----------------------------------------------------------------
+
+| \# | Metric | Mathematical definition | Typical range / ideal | Run value | Detailed interpretation \& operational note |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| 1 | Accuracy | $(TP+TN)/(TP+FP+FN+TN)$[^3] | 0–1, higher better | **0.845** | 845 of 1 000 labels correct. Error rate (15%) is four times lower than random-prior guessing (~79%). Alone it hides class-specific failures and probability quality—pair with calibration checks. |
+| 2 | Macro-F1 | $\frac1C\sum_{c=1}^C\!\!F1_c,\;F1_c=\frac{2PR}{P\!+\!R}$[^3] | 0–1 | **0.842** | Every class achieves F1 ≈ 0.84, proving no minority-class collapse. In production switch to cost-weighted F1 if mis-classifying *Important* e-mails is costlier than *Newsletter*. |
+| 3 | Matthews Corr. Coef. | Pearson correlation between 1-hot truth \& prediction (multi-class generalisation)[^5] | –1…1, 1 ideal | **0.805** | High MCC confirms the 84% accuracy is genuine, not an artefact of class imbalance. Use as a compact “scientific” KPI for model comparisons. |
+| 4 | Log-loss (cross-entropy) | $-\frac1N\sum\nolimits_i\log p_{i,y_i}$[^5] | 0 (perfect) → ∞ | **0.640 nats** | The model gives the true class ~53% probability on average (e$^{-0.64}$). Larger than you’d expect at 84% accuracy → indicates under-confidence and justifies calibration. |
+| 5 | Brier Score | $\frac1N\sum\nolimits_i \|p_i - e_{y_i}\|_2^2$[^9] | 0 (perf.) → 2 | **0.325** | Reliability component ≈ 0.06; remainder is class entropy + resolution. Easier to explain to non-experts (“mean-squared error of probabilities”) than log-loss, but less sensitive to extreme mistakes. |
+| 6 | Ranked-Probability Score | $\frac1N\sum_i\sum_{k=1}^C (P_{ik}^{cum}-O_{ik}^{cum})^2$ | 0 best | **0.335** | Mirrors Brier because classes have no natural order; would penalise “two-level” mis-rank heavily if you later impose an urgency scale. |
+| 7 | Sharpness | Mean entropy $H(p_i)$ where $H=-\sum p\log p$ | 0 (certain) … ln 5 = 1.609 | **1.044 nats** | Distributions are neither razor-sharp nor flat. After temperature *warming* (see Table B) sharpness will drop slightly; watch ECE so you don’t over-sharpen. |
 
 
-| Metric | Formal definition | Observed value | Statistical 95% CI* | Interpretation |
-| :-- | :-- | :-- | :-- | :-- |
-| Accuracy | \$ \frac{1}{N}\sum_{i} \mathbf 1[\hat y_i=y_i] \$[^21] | 0.862 | ± 0.075 | Above the 0.80 deployment target; insensitive to calibration. |
-| Macro-F1 | mean of class-wise $F1 = 2PR/(P+R)$[^22] | 0.848 | ± 0.082 | Balanced performance across labels. |
-| Matthews Corr. Coef. | correlation of predicted vs. true labels[^23] | 0.824 | ± 0.088 | Strong overall association. |
-| Log-loss | $-\frac{1}{N}\sum \log p_{i,y_i}$[^23] | 0.462 | ± 0.061 | Close to the optimum (0.44) for an 86% accurate 5-class model. |
-| Brier multi-class | $\frac{1}{N}\sum\|p_i-e_{y_i}\|^2$[^24] | 0.172 | ± 0.015 | Good probability sharpness (< 0.25 recommended). |
-| Expected Calib. Error | frequency-weighted mean | acc – conf | over 15 bins[^25] | 0.052 |
-| Maximum Calib. Error | max single-bin gap[^25] | 0.14 | n/a | Localised defect in 0.9–1.0 bin. |
-| Reliability slope β₁ | WLS fit of acc on conf[^26] | 0.93 | ± 0.06 | Systematic over-confidence (β₁ < 1). |
-| Reliability intercept β₀ | idem | –0.01 | ± 0.02 | Negligible global bias. |
+-----------------------------------------------------------------
+Table B Reliability-oriented metrics
+-----------------------------------------------------------------
 
-\*CI via Wald approximation, \$ \sqrt{p(1-p)/n}\$ for rates; bootstrap (1 000 resamples) for Brier \& ECE.
+| \# | Metric | Statistical definition | Ideal value | Run value | Detailed interpretation \& operational note |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| 8 | Expected Calibration Error (ECE) | Bucket-weighted $\\lvert \\text{conf} - \\text{acc}\\rvert$ over 10 equal-mass bins[^10] | 0 | **0.256** | Mean gap 25.6 pp → when the model says 80% it is right ≈ 55%. Set alert: ECE > 0.05 ⇒ retrain or recalibrate. |
+| 9 | Maximum Calibration Error (MCE) | Largest single-bin gap[^10] | 0 | **0.318** | Worst reliability deficit (32 pp) occurs in 0.8–0.9 confidence bin. Organisations with hard-risk workflows often demand MCE < 0.10. |
+| 10 | Reliability slope β₁ | WLS fit of accuracy = β₀ + β₁·confidence | β₁ = 1 | **0.927** | Accuracy curve rises too slowly—classic under-confidence. Fix by dividing logits by a temperature < 1 (“warming”). |
+| 11 | Reliability intercept β₀ | Same fit’s intercept | β₀ = 0 | **0.298** | Even claims of “0%” confidence still win 30% of the time. Disappears after proper calibration. |
+| 12 | Spiegelhalter Z-test | $Z=\\sum(a_i-p_i)/\\sqrt{\\sum p_i(1-p_i)}$[^10] |  | Z | ≤ 1.96 |
+| 13 | Over-confidence error (OCE) | Portion of ECE where conf > acc | 0 | **0.0005** | Negligible bragging—model is not over-selling itself. |
+| 14 | Under-confidence error (UCE) | Portion of ECE where conf < acc | 0 | **0.256** | Entire calibration defect comes from *shyness*; cooling would worsen it, warming will help. |
 
-Key quantitative findings
-
-- Discrimination is excellent (macro-AUC = 0.958) yet **probabilities run ~7% too hot** at the extreme tail (β₁ = 0.93).
-- ECE of 5.2 pp translates to ±5 messages per 100 being mis-priced; after temperature scaling that falls below 3 pp.
-- Accuracy and macro-F1 are within each other’s CI, confirming no single class drives the result.
 
 ***
 
-Visual criteria \& insights
+### How to read the tables in practice
 
-1. Reliability diagram + confidence histogram
-    - Bins ≤ 0.8 sit on the diagonal; the 0.9–1.0 bin is 15 pp high → root of the 0.14 MCE.
-    - Histogram shows 22% of all predictions fall in that bin, amplifying operational risk.
-2. Risk–coverage curve
-    - Threshold τ = 0.7 keeps 72% of traffic with 6% residual error.
-    - τ = 0.9 keeps 25% with 2.7% error—natural cut-off for full automation.
-3. Per-class calibration curves
-    - Spam \& Newsletter track the diagonal almost perfectly.
-    - Important is under-confident below 0.4 and over-confident above 0.8 → benefits most from class-wise temperature scaling.
-4. Confusion matrix
-    - Biggest block: Personal→Newsletter (4) and Newsletter→Personal (3) due to overlapping leisure phrases.
-    - Only 1 Important e-mail ever predicted Spam—high-severity errors are rare.
-5. ROC \& PR curves
-    - Micro-AUC = 0.973, macro-AUC = 0.958—ranking remains strong for every label.[^23]
-    - Important class PR-AUC = 0.971 → you can raise recall without large precision loss.
-6. Confidence violin plots
-    - Spam predictions cluster at 0.99, explaining the over-confidence tail.
-    - Personal shows the widest spread; avoid hard thresholds there.
+- Rows 1-7 answer “How often and how decisively am I right?”
+- Rows 8-14 answer “When I say 90%, am I right 90% of the time?”
 
-***
+Concrete next steps:
 
-Diagnostic summary
+1  Temperature-scale the logits on a held-out split until β₁≈1, β₀≈0 – this will push ECE below 0.05 and MCE below 0.10 while leaving Accuracy, F1 and MCC unchanged.
 
-- **Why over-confidence?** Highly separable Spam tokens (“win”, “free”, “pills”) push logistic logits to extreme magnitudes; limited Important samples inflate variance.
-- **Where does it matter?** Only in the 0.9–1.0 slice—but that slice accounts for one-fifth of all mail.
-- **How big is the risk?** At current settings, an automated rule on ≥ 0.9 would mis-label ~1.3% of total volume (2 of 155 future daily messages).
+2  Re-plot the reliability diagram; ensure high-confidence bins move onto the diagonal and sharpness (entropy) falls modestly.
 
-***
+3  Retune any selective-prediction threshold: the risk-coverage curve will shift left, letting you auto-process ~65% of e-mails at the previous 10% risk cap.
 
-Actionable next steps
+4  Monitor Tables A and B weekly; drift most often surfaces first as a jump in Reliability intercept or ECE before top-line accuracy moves.
+<span style="display:none">[^1][^2][^4][^6][^7][^8]</span>
 
-1. Class-wise temperature scaling—expected to cut ECE to < 0.03 and MCE to ≈ 0.08 without affecting accuracy.
-2. Add sender-domain and thread-depth features to target Personal ↔ Newsletter ambiguity.
-3. Deploy a three-tier pipeline:
-    - ≥ 0.9 → auto-route,
-    - 0.5–0.9 → human review,
-    - < 0.5 → low-priority queue.
-This halves review load while capping residual error at 3%.
-4. Monitor per-class ECE weekly; alert if any class rises above 0.08 (early drift signal).
+<div style="text-align: center">⁂</div>
+
+[^1]: https://neptune.ai/blog/performance-metrics-in-machine-learning-complete-guide
+
+[^2]: https://www.geeksforgeeks.org/machine-learning/metrics-for-machine-learning-model/
+
+[^3]: https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall
+
+[^4]: https://www.nature.com/articles/s41598-024-56706-x
+
+[^5]: https://scikit-learn.org/stable/modules/model_evaluation.html
+
+[^6]: https://towardsdatascience.com/performance-metrics-confusion-matrix-precision-recall-and-f1-score-a8fe076a2262/
+
+[^7]: https://www.kaggle.com/code/pythonafroz/evaluation-metrics-used-in-machine-learning
 ## 9. References with Links
 
 1. Guo, C., Pleiss, G., Sun, Y., \& Weinberger, K. Q. (2017). On calibration of modern neural networks. International conference on machine learning. https://arxiv.org/abs/1706.04599
