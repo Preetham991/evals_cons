@@ -122,18 +122,18 @@ Where F(θ) is the Fisher Information Matrix.
 #### 3.1.4 Comprehensive Advantages & Disadvantages
 
 **Advantages**:
-- ✅ **Computational Efficiency**: Single forward pass, O(1) extraction time
-- ✅ **Hardware Optimized**: Leverage existing softmax implementations
-- ✅ **Interpretable**: Direct probability interpretation
-- ✅ **Differentiable**: End-to-end training compatible
-- ✅ **Memory Efficient**: No additional storage requirements
+- 1. **Computational Efficiency**: Single forward pass, O(1) extraction time
+- 2. **Hardware Optimized**: Leverage existing softmax implementations
+- 3. **Interpretable**: Direct probability interpretation
+- 4. **Differentiable**: End-to-end training compatible
+- 5. **Memory Efficient**: No additional storage requirements
 
 **Disadvantages**:
-- ❌ **Overconfidence Bias**: Systematically inflated estimates (avg 23% overconfidence)
-- ❌ **Poor Calibration**: ECE typically 0.15-0.30 without post-processing
-- ❌ **Softmax Bottleneck**: Limited expressiveness due to normalization constraints
-- ❌ **Training Set Overfitting**: High confidence on memorized patterns
-- ❌ **Class Imbalance Sensitivity**: Biased toward majority classes
+- 1. **Overconfidence Bias**: Systematically inflated estimates (avg 23% overconfidence)
+- 2. **Poor Calibration**: ECE typically 0.15-0.30 without post-processing
+- 3. **Softmax Bottleneck**: Limited expressiveness due to normalization constraints
+- 4. **Training Set Overfitting**: High confidence on memorized patterns
+- 5. **Class Imbalance Sensitivity**: Biased toward majority classes
 
 ### 3.2 Margin-Based Confidence Methods
 
@@ -193,18 +193,18 @@ M_{ratio}(x) = P(ŷ|x) / P(y_{(2)}|x)
 #### 3.2.4 Advanced Advantages & Disadvantages
 
 **Advantages**:
-- ✅ **Boundary-Aware**: Captures decision uncertainty effectively
-- ✅ **Robust to Overconfidence**: Less affected by systematic probability inflation
-- ✅ **Class-Agnostic**: Works equally well across imbalanced classes
-- ✅ **Threshold-Friendly**: Natural cutoff points for automation decisions
-- ✅ **Ensemble-Compatible**: Combines well with other uncertainty measures
+- 1. **Boundary-Aware**: Captures decision uncertainty effectively
+- 2. **Robust to Overconfidence**: Less affected by systematic probability inflation
+- 3. **Class-Agnostic**: Works equally well across imbalanced classes
+- 4. **Threshold-Friendly**: Natural cutoff points for automation decisions
+- 5. **Ensemble-Compatible**: Combines well with other uncertainty measures
 
 **Disadvantages**:
-- ❌ **Binary Focus**: Only considers top two classes, ignores full distribution
-- ❌ **Scale Dependence**: Sensitive to overall confidence level calibration
-- ❌ **Uniform Assumption**: Assumes linear relationship between margin and reliability
-- ❌ **Computational Overhead**: Requires sorting operations for top-k variants
-- ❌ **Poor OOD Performance**: Fails to detect out-of-distribution emails effectively
+- 1. **Binary Focus**: Only considers top two classes, ignores full distribution
+- 2. **Scale Dependence**: Sensitive to overall confidence level calibration
+- 3. **Uniform Assumption**: Assumes linear relationship between margin and reliability
+- 4. **Computational Overhead**: Requires sorting operations for top-k variants
+- 5. **Poor OOD Performance**: Fails to detect out-of-distribution emails effectively
 
 ### 3.3 Entropy-Based Uncertainty Quantification
 
@@ -272,18 +272,18 @@ H(f) = -∫ f(x) log f(x) dx
 #### 3.3.4 Comprehensive Evaluation
 
 **Advantages**:
-- ✅ **Full Distribution**: Considers entire probability vector, not just top predictions
-- ✅ **Information-Theoretic**: Principled foundation from information theory
-- ✅ **Scale-Invariant**: Unaffected by uniform scaling of probabilities
-- ✅ **Smooth**: Differentiable everywhere for gradient-based optimization
-- ✅ **Universal**: Applicable to any probabilistic classifier
+- 1. **Full Distribution**: Considers entire probability vector, not just top predictions
+- 2. **Information-Theoretic**: Principled foundation from information theory
+- 3. **Scale-Invariant**: Unaffected by uniform scaling of probabilities
+- 4. **Smooth**: Differentiable everywhere for gradient-based optimization
+- 5. **Universal**: Applicable to any probabilistic classifier
 
 **Disadvantages**:
-- ❌ **Logarithmic Sensitivity**: Small probability changes cause large entropy shifts
-- ❌ **Unintuitive Scale**: Entropy values don't directly correspond to error rates
-- ❌ **Class Imbalance**: High entropy even when one class is clearly dominant
-- ❌ **Computational Cost**: Requires logarithm evaluation for each class
-- ❌ **OOD Limitations**: May assign low entropy to confidently wrong OOD predictions
+- 1. **Logarithmic Sensitivity**: Small probability changes cause large entropy shifts
+- 2. **Unintuitive Scale**: Entropy values don't directly correspond to error rates
+- 3. **Class Imbalance**: High entropy even when one class is clearly dominant
+- 4. **Computational Cost**: Requires logarithm evaluation for each class
+- 5. **OOD Limitations**: May assign low entropy to confidently wrong OOD predictions
 
 ### 3.4 Energy-Based Confidence Estimation
 
@@ -374,18 +374,18 @@ E_{ensemble}(x) = -log(1/M Σₘ exp(-Eₘ(x)))
 #### 3.4.5 Comprehensive Assessment
 
 **Advantages**:
-- ✅ **OOD Detection**: Superior performance on out-of-distribution inputs
-- ✅ **Theoretical Grounding**: Based on statistical mechanics principles
-- ✅ **Uncertainty Quantification**: Natural measure of model uncertainty
-- ✅ **Temperature Scaling**: Easy integration with calibration methods
-- ✅ **Ensemble Ready**: Natural framework for model combination
+- 1. **OOD Detection**: Superior performance on out-of-distribution inputs
+- 2. **Theoretical Grounding**: Based on statistical mechanics principles
+- 3. **Uncertainty Quantification**: Natural measure of model uncertainty
+- 4. **Temperature Scaling**: Easy integration with calibration methods
+- 5. **Ensemble Ready**: Natural framework for model combination
 
 **Disadvantages**:
-- ❌ **Calibration Required**: Raw energy values poorly calibrated to probabilities
-- ❌ **Computational Overhead**: Requires additional forward passes for some variants
-- ❌ **Hyperparameter Sensitivity**: Performance depends heavily on temperature choice
-- ❌ **Limited Interpretability**: Energy units don't map directly to business metrics
-- ❌ **Training Complexity**: May require specialized training procedures
+- 1. **Calibration Required**: Raw energy values poorly calibrated to probabilities
+- 2. **Computational Overhead**: Requires additional forward passes for some variants
+- 3. **Hyperparameter Sensitivity**: Performance depends heavily on temperature choice
+- 4. **Limited Interpretability**: Energy units don't map directly to business metrics
+- 5. **Training Complexity**: May require specialized training procedures
 
 ### 3.5 Token-Level Aggregation Methods
 
@@ -521,18 +521,18 @@ Where g_i is position-specific calibration function.
 #### 3.5.6 Comprehensive Analysis
 
 **Advantages**:
-- ✅ **Fine-Grained**: Leverages token-level information for better estimates
-- ✅ **Interpretable**: Can identify which parts of email drive low confidence
-- ✅ **Flexible**: Multiple aggregation strategies for different use cases
-- ✅ **Structured**: Can incorporate email-specific structure knowledge
-- ✅ **Diagnostic**: Provides insights into model behavior patterns
+- 1. **Fine-Grained**: Leverages token-level information for better estimates
+- 2. **Interpretable**: Can identify which parts of email drive low confidence
+- 3. **Flexible**: Multiple aggregation strategies for different use cases
+- 4. **Structured**: Can incorporate email-specific structure knowledge
+- 5. **Diagnostic**: Provides insights into model behavior patterns
 
 **Disadvantages**:
-- ❌ **Computational Overhead**: Requires token-level confidence extraction
-- ❌ **Hyperparameter Complexity**: Multiple aggregation weights to tune
-- ❌ **Length Sensitivity**: Performance varies significantly with email length
-- ❌ **Tokenization Dependence**: Results depend on specific tokenization scheme
-- ❌ **Aggregation Artifacts**: Statistical aggregation may introduce biases
+- 1. **Computational Overhead**: Requires token-level confidence extraction
+- 2. **Hyperparameter Complexity**: Multiple aggregation weights to tune
+- 3. **Length Sensitivity**: Performance varies significantly with email length
+- 4. **Tokenization Dependence**: Results depend on specific tokenization scheme
+- 5. **Aggregation Artifacts**: Statistical aggregation may introduce biases
 
 ### 3.6 Ensemble-Based Confidence Methods
 
