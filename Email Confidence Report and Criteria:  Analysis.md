@@ -692,6 +692,96 @@ L_{judge} = E_{(x,y)}[ℓ(f_{judge}(z_{judge}), I[ŷ = y])]
 
 ```
 Where I[·] is indicator function and ℓ is loss (e.g., cross-entropy, MSE).
+1. **Accuracy**
+    - Theoretical foundation – Empirical probability that a Bernoulli trial succeeds, i.e. *ŷ = y*.[^7]
+    - Formula – \$ Acc=N^{-1}\sum_{i} \mathbf1[\hat y_i=y_i] \$.
+Confidence bounds: Wald CI \$ \hat p \pm z_{1-\alpha/2}\sqrt{\hat p(1-\hat p)/N} \$; exact CI via Beta distribution.
+    - Advanced variants – Balanced accuracy (mean recall per class); cost-weighted accuracy \$ \sum w_i\mathbf1[\hat y_i=y_i]/\sum w_i \$.
+    - When to choose – Class mix roughly balanced and you need an easily explained SLA KPI.
+    - Email tips – Majority “Work” traffic inflates the score; track minority recall separately.
+    - Advantages – Intuitive, cheap, bounded, analytic CIs.
+    - Disadvantages – Fails under imbalance, ignores calibration and error severity.
+2. **Macro-F1 Score**
+    - Foundation – Harmonic mean of precision and recall computed *per class* then averaged, giving equal weight to every label.[^8]
+    - Formula – \$ P_c=\tfrac{TP_c}{TP_c+FP_c},\;R_c=\tfrac{TP_c}{TP_c+FN_c},\;F1_c=\tfrac{2P_cR_c}{P_c+R_c};\;Macro-F1=C^{-1}\sum_c F1_c \$.
+    - Variants – Micro-F1 (pool counts first); weighted-F1 (support-weighted).
+    - When to choose – Fairness or regulatory contexts where “Important” must weigh the same as “Personal”.
+    - Email tips – Newsletter ↔ Spam border usually hurts precision; class-wise F1 pinpoints this.
+    - Advantages – Balances precision \& recall; insensitive to TN deluge.
+    - Disadvantages – Non-decomposable, high variance for tiny classes, less intuitive.
+3. **Matthews Correlation Coefficient (MCC)**
+    - Foundation – Pearson correlation between true and predicted indicator vectors; range −1…1.[^1]
+    - Binary formula – \$ MCC=\frac{TP\,TN-FP\,FN}{\sqrt{(TP+FP)(TP+FN)(TN+FP)(TN+FN)}} \$.
+    - Multi-class – Apply the formula to the flattened confusion matrix.
+    - When to choose – Heavy class imbalance or if both FP and FN are costly (phishing detection).
+    - Email tips – Highlights Personal ↔ Newsletter swaps that accuracy hides.
+    - Advantages – Imbalance robust; value 0 means random, 1 perfect.
+    - Disadvantages – Undefined if any denominator term is zero; algebraically dense.
+4. **Negative Log-Likelihood (Log-loss)**
+    - Foundation – Proper scoring rule derived from maximum-likelihood estimation.[^1]
+    - Formula – \$ NLL=-N^{-1}\sum_i \log p_{i,y_i} \$.
+Decomposition: NLL = H(Y)+Dₖₗ(Y‖P).
+    - Variants – Class-weighted NLL; label-noise NLL $(1-\varepsilon)p+\varepsilon/C$.
+    - When to choose – You need well-calibrated probabilities for thresholding or selective actions.
+    - Email tips – Short one-liners flatten softmax ⇒ higher NLL; attachment phishing yields extreme logits ⇒ spikes.
+    - Advantages – Differentiable, calibration-sensitive, training-aligned.
+    - Disadvantages – Unbounded, sensitive to single mis-confident point, harder to explain.
+5. **Brier Score**
+    - Foundation – Mean-squared error between probability vector and one-hot truth; proper and bounded.[^9]
+    - Formula – \$ BS=N^{-1}\sum_{i,c}(p_{i,c}-\mathbf1[c=y_i])^2 \$.
+Murphy decomposition = Reliability – Resolution + Uncertainty.
+    - Variants – Brier Skill Score (vs climatology); cost-weighted BS.
+    - When to choose – Joint need for calibration and sharpness; binary spam filters with asymmetric penalties.
+    - Email tips – Apply 10× weight to spam false-negatives to reflect breach cost.
+    - Advantages – Bounded; decomposable diagnostics; less punitive than NLL.
+    - Disadvantages – Units are squared prob.; no intuitive target; quadratic under-weights rare extreme errors.
+6. **Expected Calibration Error (ECE)**
+    - Foundation – Average |accuracy – confidence| across M bins[^10].
+    - Formula – \$ ECE=\sum_m|B_m|/N\,|acc(B_m)-conf(B_m)| \$.
+    - Variants – Adaptive (equal-mass) bins; class-wise ECE.
+    - When to choose – Continuous monitoring of probability quality; tuning temperature.
+    - Email tips – Slice by sender domain to catch spoofing drift.
+    - Advantages – Simple scalar; actionable during post-processing.
+    - Disadvantages – Bin-choice sensitive; low ECE can mask local mis-calibration.
+7. **Maximum Calibration Error (MCE)**
+    - Foundation – Worst-case bin gap \$ \max_m|acc-conf| \$.
+    - Variants – Percentile-MCE (e.g., 95-th) to reduce noise.
+    - When to choose – Safety guard-rail; halt auto-delete when MCE > threshold.
+    - Advantages – Direct risk bound; complements mean-based ECE.
+    - Disadvantages – Very noisy on small bins; non-differentiable.
+8. **Reliability Slope β₁ \& Intercept β₀**
+    - Foundation – Weighted least-squares fit *accuracy = β₀ + β₁·confidence*; perfect calibration ⇒ β₀ = 0, β₁ = 1.[^1]
+    - When to choose – Need directional signal (over- vs under-confidence) and statistical test.
+    - Email tips – Weekly trend of β₁; sudden drop warns “confidence inflation” bug.
+    - Advantages – Gives CIs; easy to visualise on reliability diagram.
+    - Disadvantages – Assumes linearity; needs ≥ 20 samples per bin.
+9. **Spiegelhalter Z-test**
+    - Foundation – Hypothesis test of global calibration:
+\$ Z={\sum_i(y_i-p_{i,y_i})}/{\sqrt{\sum_i p_{i,y_i}(1-p_{i,y_i})}} \$\,.[^9]
+    - When to choose – Regulatory audits demanding p-value; high-volume streams (CLT holds).
+    - Email tips – Report per class; |Z| > 1.96 triggers recalibration.
+    - Advantages – Clear pass/fail; no binning bias.
+    - Disadvantages – Over-sensitive at huge N; ignores error direction.
+10. **Over- vs Under-Confidence Error (OCE / UCE)**
+    - Foundation – Split ECE into positive (over) and negative (under) parts; direction = OCE-UCE.
+    - When to choose – Deciding whether to “cool” (increase τ) or “warm” (decrease τ) probabilities.
+    - Email tips – Promo mails usually ↑ OCE; important mails ↑ UCE.
+    - Advantages – Actionable calibration bias signal.
+    - Disadvantages – Same bin issues as ECE; dashboard clutter (three numbers).
+11. **Ranked Probability Score (RPS)**
+    - Foundation – Ordinal extension of Brier; sum squared errors of *cumulative* probabilities.[^6]
+\$ RPS= \sum_{c=1}^{C-1}\bigl(\sum_{j\le c}p_{j}-\sum_{j\le c}o_{j}\bigr)^2 \$.
+    - When to choose – Ordered urgency levels where distance matters (off-by-two worse than off-by-one).
+    - Email tips – SLA may require “Critical” never predicted below “Important”.
+    - Advantages – Respects order, bounded, decomposable.
+    - Disadvantages – Implementation complexity; harder to explain.
+12. **Sharpness**
+    - Foundation – Average entropy of predictive distributions; lower entropy ⇒ sharper forecasts.[^1]
+\$ Sharpness=N^{-1}\sum_i H(p_i),\;H(p)=-\sum_c p_c\log p_c \$.
+    - When to choose – Compare ensembling vs single model; evaluate post-calibration trade-off.
+    - Email tips – Spam classifier should be sharper than importance predictor; monitor per label.
+    - Advantages – Captures decisiveness independent of correctness.
+    - Disadvantages – No absolute target; can be gamed by over-confident yet mis-calibrated probabilities.
 
 #### 3.7.3 Advanced Judge Architectures
 
